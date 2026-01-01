@@ -3,5 +3,6 @@ __pycache__/
 .venv/
 .env
 node_modules/
+frontend/dist/
 .DS_Store
 .vscode/

@@ -2,6 +2,8 @@
 
 This repository contains a FastAPI backend and React + Vite frontend scaffold for the Itay Log Reviewer project. Both stacks include linting, formatting, and simple health/UI starters so you can iterate quickly.
 
+The backend now accepts `.log`, `.txt`, `.out`, and `.err` uploads, normalizes timestamps/severity/subsystems, and uses an LLM (or a deterministic heuristic fallback) to extract errors, timeframes, failed actions, and failures by system/agent. The frontend provides an upload form and renders the normalized log preview alongside the structured insights.
+
 ## Getting started
 
 ### Backend (FastAPI)
