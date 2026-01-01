@@ -64,6 +64,11 @@ async def _extract_file_contents(file: UploadFile) -> list[str]:
 
             if contents:
                 return contents
+
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Uploaded zip archive '{filename}' contained no readable files.",
+            )
     except BadZipFile:
         # Not a zip file; fall back to reading as plain text.
         pass

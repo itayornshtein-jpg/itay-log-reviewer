@@ -83,6 +83,20 @@ def test_upload_zip_with_mixed_extensions():
     assert payload["entries"][3]["subsystem"] == "auth"
 
 
+def test_upload_zip_with_no_members():
+    buffer = BytesIO()
+    with ZipFile(buffer, "w"):
+        pass
+
+    buffer.seek(0)
+    files = [("files", ("empty.zip", buffer, "application/zip"))]
+
+    response = client.post("/logs/upload", files=files)
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Uploaded zip archive 'empty.zip' contained no readable files."
+
+
 def test_parse_log_content_round_trip():
     entries = parse_log_content(SAMPLE_LOG)
 
