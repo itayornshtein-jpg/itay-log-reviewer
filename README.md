@@ -22,6 +22,13 @@ The backend now accepts `.log`, `.txt`, `.out`, and `.err` uploads, normalizes t
    ruff check app
    ```
 
+#### Coralogix configuration
+- `CORALOGIX_API_KEY` (required): API token used to authenticate requests to Coralogix.
+- `CORALOGIX_BASE_URL` (optional): Override the Coralogix API base (defaults to `https://api.coralogix.com/api/v1`).
+- `CORALOGIX_WEBHOOK_URL` (optional): Webhook URL you have configured in Coralogix; surfaced in the UI for visibility.
+
+The backend exposes `GET /coralogix/logs` to proxy searches with `system`, `subsystem`, `query`, `page`, and `page_size` filters. Errors from Coralogix are translated into structured HTTP responses for the frontend.
+
 ### Frontend (React + Vite)
 1. Install dependencies:
    ```bash
