@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -17,14 +19,23 @@ class CoralogixSettings:
     webhook_url: str | None
 
     @classmethod
-    def from_env(cls) -> "CoralogixSettings":
-        import os
-
+    def from_env(cls) -> CoralogixSettings:
         return cls(
             api_key=os.getenv("CORALOGIX_API_KEY"),
             base_url=os.getenv("CORALOGIX_BASE_URL", "https://api.coralogix.com/api/v1"),
             webhook_url=os.getenv("CORALOGIX_WEBHOOK_URL"),
         )
+
+
+@dataclass
+class CoralogixSearchOptions:
+    """User-supplied filters and pagination for Coralogix queries."""
+
+    system: str | None = None
+    subsystem: str | None = None
+    query: str | None = None
+    page: int = 1
+    page_size: int = 50
 
 
 class CoralogixClient:
@@ -53,24 +64,21 @@ class CoralogixClient:
     def search_logs(
         self,
         *,
-        system: str | None = None,
-        subsystem: str | None = None,
-        query: str | None = None,
-        page: int = 1,
-        page_size: int = 50,
+        options: CoralogixSearchOptions | None = None,
     ) -> dict[str, Any]:
+        options = options or CoralogixSearchOptions()
         if not self.settings.api_key:
             msg = "Coralogix API key is not configured."
             raise RuntimeError(msg)
 
-        if page < 1 or page_size < 1:
+        if options.page < 1 or options.page_size < 1:
             msg = "page and page_size must be positive integers"
             raise ValueError(msg)
 
         body = {
-            "query": self._build_query(system, subsystem, query),
-            "page": page,
-            "pageSize": page_size,
+            "query": self._build_query(options.system, options.subsystem, options.query),
+            "page": options.page,
+            "pageSize": options.page_size,
         }
 
         response = self._http_client.post(
@@ -84,10 +92,8 @@ class CoralogixClient:
         except httpx.HTTPStatusError as exc:  # pragma: no cover - transport error handling
             msg = exc.response.text
             if exc.response.headers.get("Content-Type", "").startswith("application/json"):
-                try:
+                with contextlib.suppress(Exception):  # pragma: no cover - best effort parsing
                     msg = exc.response.json().get("message", msg)
-                except Exception:  # pragma: no cover - best effort parsing
-                    pass
             raise RuntimeError(msg or "Failed to query Coralogix") from exc
 
         data = response.json()
@@ -107,8 +113,8 @@ class CoralogixClient:
 
         return {
             "entries": normalized_logs,
-            "page": data.get("page", page),
-            "page_size": data.get("pageSize", page_size),
+            "page": data.get("page", options.page),
+            "page_size": data.get("pageSize", options.page_size),
             "total": data.get("total", data.get("totalHits", len(normalized_logs))),
             "webhook_url": self.settings.webhook_url,
         }

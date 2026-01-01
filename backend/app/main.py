@@ -4,7 +4,7 @@ from typing import Annotated
 from fastapi import FastAPI, File, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 
-from .coralogix_client import CoralogixClient
+from .coralogix_client import CoralogixClient, CoralogixSearchOptions
 from .llm_client import LogLLMClient
 from .log_parser import parse_log_content
 from .models import (
@@ -84,17 +84,19 @@ def search_coralogix_logs(
 ) -> CoralogixSearchResponse:
     """Proxy search requests to Coralogix with filter and pagination support."""
 
+    options = CoralogixSearchOptions(
+        system=system, subsystem=subsystem, query=query, page=page, page_size=page_size
+    )
+
     try:
-        results = coralogix_client.search_logs(
-            system=system,
-            subsystem=subsystem,
-            query=query,
-            page=page,
-            page_size=page_size,
-        )
+        results = coralogix_client.search_logs(options=options)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
 
     return CoralogixSearchResponse.model_validate(results)
