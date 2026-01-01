@@ -6,6 +6,13 @@ The backend now accepts `.log`, `.txt`, `.out`, and `.err` uploads, normalizes t
 
 ## Getting started
 
+### Run the full stack with one command
+After installing backend and frontend dependencies once, you can launch both services together:
+```bash
+./start.sh
+```
+This starts FastAPI on port 8000 and Vite on port 5173 in the same terminal (press Ctrl+C to stop).
+
 ### Backend (FastAPI)
 1. Create a virtual environment and install dependencies:
    ```bash
@@ -13,13 +20,17 @@ The backend now accepts `.log`, `.txt`, `.out`, and `.err` uploads, normalizes t
    python -m venv .venv && source .venv/bin/activate
    pip install -r requirements-dev.txt
    ```
-2. Run the development server:
+2. Run the development server only:
    ```bash
    uvicorn app.main:app --reload
    ```
 3. Lint the backend:
    ```bash
    ruff check app
+   ```
+4. Run backend tests:
+   ```bash
+   pytest
    ```
 
 #### Coralogix configuration
@@ -35,7 +46,7 @@ The backend exposes `GET /coralogix/logs` to proxy searches with `system`, `subs
    cd frontend
    npm install
    ```
-2. Run the development server:
+2. Run the development server only:
    ```bash
    npm run dev
    ```
