@@ -1,6 +1,5 @@
 import json
 import os
-from typing import List, Optional
 
 from openai import OpenAI
 
@@ -11,11 +10,11 @@ class LogLLMClient:
     def __init__(self, model: str = "gpt-4o-mini") -> None:
         self.model = model
         self.api_key = os.getenv("OPENAI_API_KEY")
-        self._client: Optional[OpenAI] = None
+        self._client: OpenAI | None = None
         if self.api_key:
             self._client = OpenAI(api_key=self.api_key)
 
-    def _build_prompt(self, entries: List[LogEntry]) -> str:
+    def _build_prompt(self, entries: list[LogEntry]) -> str:
         lines = []
         for entry in entries:
             timestamp = entry.timestamp.isoformat() if entry.timestamp else "(no timestamp)"
@@ -23,13 +22,14 @@ class LogLLMClient:
             lines.append(f"{timestamp} {subsystem}{entry.severity}: {entry.message}")
 
         return (
-            "Analyze the following log entries. Identify distinct errors, important timeframes, failed "
-            "actions, and failures caused by the system versus agents. Return a JSON object with keys: "
-            "errors (list), timeframes (list), failed_actions (list), system_failures (list), agent_failures (list). "
-            "Keep answers concise. Logs:\n" + "\n".join(lines)
+            "Analyze the following log entries. Identify distinct errors, important timeframes, "
+            "failed actions, and failures caused by the system versus agents. Return a JSON object "
+            "with keys: errors (list), timeframes (list), failed_actions (list), system_failures "
+            "(list), agent_failures (list). Keep answers concise. Logs:\n"
+            + "\n".join(lines)
         )
 
-    def analyze_logs(self, entries: List[LogEntry]) -> ExtractedInsights:
+    def analyze_logs(self, entries: list[LogEntry]) -> ExtractedInsights:
         if not self.api_key or not self._client:
             return self._heuristic_insights(entries)
 
@@ -65,23 +65,29 @@ class LogLLMClient:
             source="llm",
         )
 
-    def _heuristic_insights(self, entries: List[LogEntry]) -> ExtractedInsights:
-        errors = [f"{e.severity}: {e.message}" for e in entries if e.severity in {"ERROR", "CRITICAL"}]
-        failed_actions = [e.message for e in entries if "fail" in e.message.lower()]
+    def _heuristic_insights(self, entries: list[LogEntry]) -> ExtractedInsights:
+        errors = [
+            f"{entry.severity}: {entry.message}"
+            for entry in entries
+            if entry.severity in {"ERROR", "CRITICAL"}
+        ]
+        failed_actions = [entry.message for entry in entries if "fail" in entry.message.lower()]
 
-        timestamps = [e.timestamp for e in entries if e.timestamp]
-        timeframes: List[str] = []
+        timestamps = [entry.timestamp for entry in entries if entry.timestamp]
+        timeframes: list[str] = []
         if timestamps:
             start, end = min(timestamps), max(timestamps)
             timeframes.append(f"Activity spans from {start.isoformat()} to {end.isoformat()}.")
 
         system_failures = [
-            e.message for e in entries if any(keyword in e.message.lower() for keyword in ("system", "server", "service"))
+            entry.message
+            for entry in entries
+            if any(keyword in entry.message.lower() for keyword in ("system", "server", "service"))
         ]
         agent_failures = [
-            e.message
-            for e in entries
-            if any(keyword in e.message.lower() for keyword in ("agent", "worker", "client"))
+            entry.message
+            for entry in entries
+            if any(keyword in entry.message.lower() for keyword in ("agent", "worker", "client"))
         ]
 
         return ExtractedInsights(

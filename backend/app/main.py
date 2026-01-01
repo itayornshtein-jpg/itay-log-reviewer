@@ -1,4 +1,6 @@
 import os
+from typing import Annotated
+
 from fastapi import FastAPI, File, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -27,7 +29,7 @@ def read_health() -> HealthResponse:
 
 
 @app.post("/logs/upload", response_model=LogAnalysisResponse)
-async def upload_logs(file: UploadFile = File(...)) -> LogAnalysisResponse:
+async def upload_logs(file: Annotated[UploadFile, File(...)]) -> LogAnalysisResponse:
     """Accept a log file, normalize entries, and extract insights."""
 
     allowed_extensions = {".log", ".txt", ".out", ".err"}
@@ -35,14 +37,20 @@ async def upload_logs(file: UploadFile = File(...)) -> LogAnalysisResponse:
     if ext and ext.lower() not in allowed_extensions:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported file type '{ext}'. Please upload .log, .txt, .out, or .err files.",
+            detail=(
+                f"Unsupported file type '{ext}'. "
+                "Please upload .log, .txt, .out, or .err files."
+            ),
         )
 
     try:
         content_bytes = await file.read()
         content = content_bytes.decode("utf-8", errors="ignore")
     except Exception as exc:  # pragma: no cover - defensive
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unable to read uploaded file.") from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unable to read uploaded file.",
+        ) from exc
 
     entries = parse_log_content(content)
     if not entries:
@@ -52,4 +60,8 @@ async def upload_logs(file: UploadFile = File(...)) -> LogAnalysisResponse:
         )
 
     insights: ExtractedInsights = llm_client.analyze_logs(entries)
-    return LogAnalysisResponse(entries=entries, insights=insights, model=llm_client.model if insights.source == "llm" else None)
+    return LogAnalysisResponse(
+        entries=entries,
+        insights=insights,
+        model=llm_client.model if insights.source == "llm" else None,
+    )
