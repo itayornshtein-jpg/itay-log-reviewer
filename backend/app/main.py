@@ -1,4 +1,3 @@
-import os
 from io import BytesIO
 from typing import Annotated
 from zipfile import BadZipFile, ZipFile
@@ -37,10 +36,6 @@ def read_health() -> HealthResponse:
     return HealthResponse(status="ok")
 
 
-TEXT_EXTENSIONS = {".log", ".txt", ".out", ".err"}
-ALLOWED_EXTENSIONS = TEXT_EXTENSIONS | {".zip"}
-
-
 async def _extract_file_contents(file: UploadFile) -> list[str]:
     """Return decoded text contents from supported uploads.
 
@@ -48,17 +43,6 @@ async def _extract_file_contents(file: UploadFile) -> list[str]:
     """
 
     filename = file.filename or "uploaded_file"
-    _, ext = os.path.splitext(filename)
-    ext = ext.lower()
-
-    if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Unsupported file type '{ext}'. "
-                "Please upload .log, .txt, .out, .err, or .zip files."
-            ),
-        )
 
     try:
         content_bytes = await file.read()
@@ -68,27 +52,26 @@ async def _extract_file_contents(file: UploadFile) -> list[str]:
             detail=f"Unable to read uploaded file '{filename}'.",
         ) from exc
 
-    if ext == ".zip":
-        try:
-            with ZipFile(BytesIO(content_bytes)) as archive:
-                contents: list[str] = []
-                for info in archive.infolist():
-                    if info.is_dir():
-                        continue
+    try:
+        with ZipFile(BytesIO(content_bytes)) as archive:
+            contents: list[str] = []
+            for info in archive.infolist():
+                if info.is_dir():
+                    continue
 
-                    inner_ext = os.path.splitext(info.filename)[1].lower()
-                    if inner_ext not in TEXT_EXTENSIONS:
-                        continue
+                with archive.open(info) as member:
+                    contents.append(member.read().decode("utf-8", errors="ignore"))
 
-                    with archive.open(info) as member:
-                        contents.append(member.read().decode("utf-8", errors="ignore"))
-
+            if contents:
                 return contents
-        except BadZipFile as exc:
+
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid zip archive '{filename}'.",
-            ) from exc
+                detail=f"Uploaded zip archive '{filename}' contained no readable files.",
+            )
+    except BadZipFile:
+        # Not a zip file; fall back to reading as plain text.
+        pass
 
     return [content_bytes.decode("utf-8", errors="ignore")]
 
