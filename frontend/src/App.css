@@ -1,0 +1,41 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding: 3rem;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.app__header h1 {
+  margin: 0;
+  font-size: 2.5rem;
+}
+
+.app__header p {
+  margin: 0.5rem 0 0;
+  color: #475569;
+}
+
+.app__body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.5rem;
+}
+
+.card {
+  background-color: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
+}
+
+.card h2 {
+  margin: 0 0 0.5rem;
+}
+
+.card p {
+  margin: 0;
+  color: #475569;
+}
