@@ -53,6 +53,36 @@ def test_upload_zip_with_logs():
     assert payload["entries"][1]["severity"] == "ERROR"
 
 
+def test_upload_logs_any_extension():
+    files = [("files", ("events.json", BytesIO(SAMPLE_LOG.encode()), "application/json"))]
+
+    response = client.post("/logs/upload", files=files)
+
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["entries"][0]["subsystem"] == "auth"
+    assert payload["entries"][1]["severity"] == "ERROR"
+
+
+def test_upload_zip_with_mixed_extensions():
+    buffer = BytesIO()
+    with ZipFile(buffer, "w") as archive:
+        archive.writestr("inner/data.json", SAMPLE_LOG)
+        archive.writestr("inner/notes.txt", SAMPLE_LOG)
+
+    buffer.seek(0)
+    files = [("files", ("bundle.bin", buffer, "application/octet-stream"))]
+
+    response = client.post("/logs/upload", files=files)
+
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert len(payload["entries"]) == 6
+    assert payload["entries"][3]["subsystem"] == "auth"
+
+
 def test_parse_log_content_round_trip():
     entries = parse_log_content(SAMPLE_LOG)
 
