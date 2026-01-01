@@ -9,6 +9,23 @@ function formatDate(isoString) {
   return isNaN(date.getTime()) ? isoString : date.toLocaleString();
 }
 
+async function parseResponsePayload(response) {
+  const contentType = response.headers.get('content-type') || '';
+  const text = await response.text();
+
+  if (!text) return null;
+
+  if (contentType.includes('application/json')) {
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      throw new Error('Received malformed JSON response from the server.');
+    }
+  }
+
+  return text;
+}
+
 function InsightList({ title, items }) {
   if (!items || items.length === 0) return null;
   return (
@@ -112,12 +129,19 @@ function App() {
         body: formData,
       });
 
+      const payload = await parseResponsePayload(response);
+
       if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.detail || 'Upload failed');
+        const detail =
+          (payload && typeof payload === 'object' && 'detail' in payload && payload.detail) ||
+          (typeof payload === 'string' ? payload : null);
+        throw new Error(detail || 'Upload failed');
       }
 
-      const payload = await response.json();
+      if (!payload || typeof payload !== 'object') {
+        throw new Error('Unexpected response format from the server.');
+      }
+
       setEntries(payload.entries || []);
       setInsights(payload.insights || null);
       setStatus('Analysis complete');
@@ -160,12 +184,19 @@ function App() {
 
     try {
       const response = await fetch(`${API_BASE}/coralogix/logs?${params.toString()}`);
+      const payload = await parseResponsePayload(response);
+
       if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.detail || 'Failed to fetch Coralogix logs');
+        const detail =
+          (payload && typeof payload === 'object' && 'detail' in payload && payload.detail) ||
+          (typeof payload === 'string' ? payload : null);
+        throw new Error(detail || 'Failed to fetch Coralogix logs');
       }
 
-      const payload = await response.json();
+      if (!payload || typeof payload !== 'object') {
+        throw new Error('Unexpected response format from the server.');
+      }
+
       setCoralogixResults({
         entries: payload.entries || [],
         total: payload.total ?? 0,
