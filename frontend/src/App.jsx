@@ -25,6 +25,7 @@ function InsightList({ title, items }) {
 
 function App() {
   const [file, setFile] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [entries, setEntries] = useState([]);
@@ -45,6 +46,30 @@ function App() {
     setFile(selected || null);
     setStatus('');
     setError('');
+  };
+
+  const handleDrop = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+    const droppedFile = event.dataTransfer.files?.[0];
+    if (droppedFile) {
+      setFile(droppedFile);
+      setStatus('');
+      setError('');
+    }
+  };
+
+  const handleDragOver = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
   };
 
   const handleSubmit = async (event) => {
@@ -84,6 +109,13 @@ function App() {
   };
 
   const previewEntries = useMemo(() => entries.slice(0, 5), [entries]);
+
+  const combinedTimeline = useMemo(() => {
+    const errors = insights?.errors || [];
+    const timeframes = insights?.timeframes || [];
+    if (!errors.length && !timeframes.length) return [];
+    return [...errors.map((item) => `Error: ${item}`), ...timeframes.map((item) => `Timeline: ${item}`)];
+  }, [insights]);
 
   const handleCoralogixFilterChange = (event) => {
     const { name, value } = event.target;
@@ -149,10 +181,19 @@ function App() {
             timestamps, severity, and subsystems before analysis.
           </p>
           <form className="upload" onSubmit={handleSubmit}>
-            <label className="file-input">
-              <span>{file ? file.name : 'Choose a file'}</span>
-              <input type="file" accept=".log,.txt,.out,.err" onChange={handleFileChange} />
-            </label>
+            <div
+              className={`dropzone ${isDragging ? 'dropzone--active' : ''}`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              <p className="dropzone__title">Drop log files here</p>
+              <p className="muted small">We will analyze the file right after you click Analyze.</p>
+              <label className="file-input">
+                <span>{file ? file.name : 'Or browse to choose a file'}</span>
+                <input type="file" accept=".log,.txt,.out,.err" onChange={handleFileChange} />
+              </label>
+            </div>
             <button type="submit">Analyze</button>
           </form>
           {status && <p className="status">{status}</p>}
@@ -172,6 +213,51 @@ function App() {
               <InsightList title="Agent failures" items={insights.agent_failures} />
             </div>
           )}
+        </div>
+      </section>
+
+      <section className="card card--wide">
+        <h2>Analysis outputs</h2>
+        <div className="outputs">
+          <div className="output-box">
+            <h3>Errors & timelines</h3>
+            {combinedTimeline.length ? (
+              <ul>
+                {combinedTimeline.map((item, index) => (
+                  <li key={`timeline-${index}`}>{item}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="muted small">Upload a file to see extracted errors and timing details.</p>
+            )}
+          </div>
+          <div className="output-box">
+            <h3>Last actions</h3>
+            {insights?.failed_actions?.length ? (
+              <ul>
+                {insights.failed_actions.map((action, index) => (
+                  <li key={`action-${index}`}>{action}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="muted small">We will summarize the final actions once analysis finishes.</p>
+            )}
+          </div>
+          <div className="output-box">
+            <h3>Suggested next steps</h3>
+            {insights?.system_failures?.length || insights?.agent_failures?.length ? (
+              <ul>
+                {(insights.system_failures || []).map((item, index) => (
+                  <li key={`system-${index}`}>System: {item}</li>
+                ))}
+                {(insights.agent_failures || []).map((item, index) => (
+                  <li key={`agent-${index}`}>Agent: {item}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="muted small">Actionable next steps will appear here after processing.</p>
+            )}
+          </div>
         </div>
       </section>
 

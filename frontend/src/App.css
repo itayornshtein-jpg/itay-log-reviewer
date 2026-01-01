@@ -69,6 +69,27 @@ main {
   margin-top: 1rem;
 }
 
+.dropzone {
+  flex: 1;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 1rem;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.dropzone--active {
+  border-color: #111827;
+  background: #eef2ff;
+  box-shadow: 0 8px 20px rgba(79, 70, 229, 0.1);
+}
+
+.dropzone__title {
+  margin: 0 0 0.35rem;
+  font-weight: 700;
+}
+
 .file-input {
   display: inline-flex;
   align-items: center;
@@ -197,6 +218,31 @@ button:hover {
   margin: 0;
   padding-left: 1.2rem;
   color: #0f172a;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.outputs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.output-box {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem;
+  background: #f8fafc;
+}
+
+.output-box h3 {
+  margin: 0 0 0.5rem;
+}
+
+.output-box ul {
+  margin: 0;
+  padding-left: 1.2rem;
   display: grid;
   gap: 0.35rem;
 }
