@@ -1,4 +1,5 @@
 from io import BytesIO
+from zipfile import ZipFile
 
 from fastapi.testclient import TestClient
 
@@ -20,10 +21,8 @@ def test_health_endpoint():
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
-
-
 def test_upload_logs_heuristic_path():
-    files = {"file": ("sample.log", BytesIO(SAMPLE_LOG.encode()), "text/plain")}
+    files = [("files", ("sample.log", BytesIO(SAMPLE_LOG.encode()), "text/plain"))]
 
     response = client.post("/logs/upload", files=files)
 
@@ -35,6 +34,23 @@ def test_upload_logs_heuristic_path():
     assert payload["insights"]["source"] == "heuristic"
     assert payload["insights"]["errors"]
     assert payload["insights"]["failed_actions"]
+
+
+def test_upload_zip_with_logs():
+    buffer = BytesIO()
+    with ZipFile(buffer, "w") as archive:
+        archive.writestr("inner/sample.log", SAMPLE_LOG)
+
+    buffer.seek(0)
+    files = [("files", ("bundle.zip", buffer, "application/zip"))]
+
+    response = client.post("/logs/upload", files=files)
+
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert len(payload["entries"]) == 3
+    assert payload["entries"][1]["severity"] == "ERROR"
 
 
 def test_parse_log_content_round_trip():

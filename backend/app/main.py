@@ -1,5 +1,7 @@
 import os
+from io import BytesIO
 from typing import Annotated
+from zipfile import BadZipFile, ZipFile
 
 from fastapi import FastAPI, File, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,40 +37,89 @@ def read_health() -> HealthResponse:
     return HealthResponse(status="ok")
 
 
-@app.post("/logs/upload", response_model=LogAnalysisResponse)
-async def upload_logs(file: Annotated[UploadFile, File(...)]) -> LogAnalysisResponse:
-    """Accept a log file, normalize entries, and extract insights."""
+TEXT_EXTENSIONS = {".log", ".txt", ".out", ".err"}
+ALLOWED_EXTENSIONS = TEXT_EXTENSIONS | {".zip"}
 
-    allowed_extensions = {".log", ".txt", ".out", ".err"}
-    _, ext = os.path.splitext(file.filename or "")
-    if ext and ext.lower() not in allowed_extensions:
+
+async def _extract_file_contents(file: UploadFile) -> list[str]:
+    """Return decoded text contents from supported uploads.
+
+    Supports raw text-based log files and zip archives that contain log files.
+    """
+
+    filename = file.filename or "uploaded_file"
+    _, ext = os.path.splitext(filename)
+    ext = ext.lower()
+
+    if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 f"Unsupported file type '{ext}'. "
-                "Please upload .log, .txt, .out, or .err files."
+                "Please upload .log, .txt, .out, .err, or .zip files."
             ),
         )
 
     try:
         content_bytes = await file.read()
-        content = content_bytes.decode("utf-8", errors="ignore")
     except Exception as exc:  # pragma: no cover - defensive
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unable to read uploaded file.",
+            detail=f"Unable to read uploaded file '{filename}'.",
         ) from exc
 
-    entries = parse_log_content(content)
-    if not entries:
+    if ext == ".zip":
+        try:
+            with ZipFile(BytesIO(content_bytes)) as archive:
+                contents: list[str] = []
+                for info in archive.infolist():
+                    if info.is_dir():
+                        continue
+
+                    inner_ext = os.path.splitext(info.filename)[1].lower()
+                    if inner_ext not in TEXT_EXTENSIONS:
+                        continue
+
+                    with archive.open(info) as member:
+                        contents.append(member.read().decode("utf-8", errors="ignore"))
+
+                return contents
+        except BadZipFile as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid zip archive '{filename}'.",
+            ) from exc
+
+    return [content_bytes.decode("utf-8", errors="ignore")]
+
+
+@app.post("/logs/upload", response_model=LogAnalysisResponse)
+async def upload_logs(files: Annotated[list[UploadFile], File(...)]) -> LogAnalysisResponse:
+    """Accept log files (including folders and archives), normalize entries, and extract insights."""
+
+    if not files:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No log lines were found in the uploaded file.",
+            detail="Please upload at least one file.",
         )
 
-    insights: ExtractedInsights = llm_client.analyze_logs(entries)
+    contents: list[str] = []
+    for file in files:
+        contents.extend(await _extract_file_contents(file))
+
+    parsed_entries = []
+    for content in contents:
+        parsed_entries.extend(parse_log_content(content))
+
+    if not parsed_entries:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No log lines were found in the uploaded files.",
+        )
+
+    insights: ExtractedInsights = llm_client.analyze_logs(parsed_entries)
     return LogAnalysisResponse(
-        entries=entries,
+        entries=parsed_entries,
         insights=insights,
         model=llm_client.model if insights.source == "llm" else None,
     )
