@@ -21,9 +21,9 @@ class CoralogixSettings:
     @classmethod
     def from_env(cls) -> CoralogixSettings:
         return cls(
-            api_key=os.getenv("CORALOGIX_API_KEY"),
+            api_key=os.getenv("cxup_xbBqkzrmz33N1etfgSVeV5ycOkC0zc"),
             base_url=os.getenv("CORALOGIX_BASE_URL", "https://api.coralogix.com/api/v1"),
-            webhook_url=os.getenv("CORALOGIX_WEBHOOK_URL"),
+            webhook_url=os.getenv("https://api.eu2.coralogix.com/api/v1/external/rule/rule-set"),
         )
 
 
