@@ -35,3 +35,23 @@ class LogAnalysisResponse(BaseModel):
     model: str | None = Field(
         default=None, description="Model used to generate the insights when applicable."
     )
+
+
+class CoralogixLog(BaseModel):
+    timestamp: datetime | None = Field(default=None)
+    severity: str | None = Field(default=None)
+    system: str | None = Field(default=None)
+    subsystem: str | None = Field(default=None)
+    message: str | None = Field(default=None)
+    raw: dict | None = Field(default=None, description="Raw payload for debugging.")
+
+
+class CoralogixSearchResponse(BaseModel):
+    entries: list[CoralogixLog] = Field(default_factory=list)
+    page: int = 1
+    page_size: int = Field(default=50, alias="pageSize")
+    total: int = 0
+    webhook_url: str | None = Field(default=None, description="Webhook configured for alerts.")
+
+    class Config:
+        populate_by_name = True

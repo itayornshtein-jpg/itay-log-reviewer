@@ -29,6 +29,16 @@ function App() {
   const [error, setError] = useState('');
   const [entries, setEntries] = useState([]);
   const [insights, setInsights] = useState(null);
+  const [coralogixFilters, setCoralogixFilters] = useState({
+    system: '',
+    subsystem: '',
+    query: '',
+  });
+  const [coralogixPage, setCoralogixPage] = useState(1);
+  const [coralogixPageSize, setCoralogixPageSize] = useState(25);
+  const [coralogixStatus, setCoralogixStatus] = useState('');
+  const [coralogixError, setCoralogixError] = useState('');
+  const [coralogixResults, setCoralogixResults] = useState({ entries: [], total: 0 });
 
   const handleFileChange = (event) => {
     const selected = event.target.files?.[0];
@@ -74,6 +84,55 @@ function App() {
   };
 
   const previewEntries = useMemo(() => entries.slice(0, 5), [entries]);
+
+  const handleCoralogixFilterChange = (event) => {
+    const { name, value } = event.target;
+    setCoralogixFilters((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const fetchCoralogixLogs = async (page = 1) => {
+    setCoralogixStatus('Querying Coralogix…');
+    setCoralogixError('');
+
+    const params = new URLSearchParams({ page: String(page), page_size: String(coralogixPageSize) });
+    if (coralogixFilters.system) params.append('system', coralogixFilters.system);
+    if (coralogixFilters.subsystem) params.append('subsystem', coralogixFilters.subsystem);
+    if (coralogixFilters.query) params.append('query', coralogixFilters.query);
+
+    try {
+      const response = await fetch(`${API_BASE}/coralogix/logs?${params.toString()}`);
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.detail || 'Failed to fetch Coralogix logs');
+      }
+
+      const payload = await response.json();
+      setCoralogixResults({
+        entries: payload.entries || [],
+        total: payload.total ?? 0,
+        webhook_url: payload.webhook_url,
+      });
+      setCoralogixPage(payload.page || page);
+      setCoralogixStatus('Results loaded');
+    } catch (err) {
+      setCoralogixError(err.message || 'An error occurred while querying Coralogix');
+      setCoralogixStatus('');
+    }
+  };
+
+  const handleCoralogixSubmit = (event) => {
+    event.preventDefault();
+    setCoralogixPage(1);
+    fetchCoralogixLogs(1);
+  };
+
+  const totalPages = Math.max(1, Math.ceil((coralogixResults.total || 0) / coralogixPageSize));
+
+  const goToPage = (nextPage) => {
+    if (nextPage < 1 || nextPage > totalPages) return;
+    setCoralogixPage(nextPage);
+    fetchCoralogixLogs(nextPage);
+  };
 
   return (
     <main className="app">
@@ -136,6 +195,101 @@ function App() {
             )}
           </div>
         )}
+      </section>
+
+      <section className="card card--wide">
+        <div className="coralogix__header">
+          <div>
+            <h2>Coralogix search</h2>
+            <p className="muted small">Filter by system, subsystem, or search text to pull recent results.</p>
+          </div>
+          {coralogixResults.webhook_url && (
+            <span className="pill">Webhook: {coralogixResults.webhook_url}</span>
+          )}
+        </div>
+
+        <form className="coralogix__filters" onSubmit={handleCoralogixSubmit}>
+          <label>
+            <span className="muted small">System</span>
+            <input
+              type="text"
+              name="system"
+              value={coralogixFilters.system}
+              onChange={handleCoralogixFilterChange}
+              placeholder="e.g. payments"
+            />
+          </label>
+          <label>
+            <span className="muted small">Subsystem</span>
+            <input
+              type="text"
+              name="subsystem"
+              value={coralogixFilters.subsystem}
+              onChange={handleCoralogixFilterChange}
+              placeholder="e.g. webhook-worker"
+            />
+          </label>
+          <label className="coralogix__query">
+            <span className="muted small">Free-text</span>
+            <input
+              type="text"
+              name="query"
+              value={coralogixFilters.query}
+              onChange={handleCoralogixFilterChange}
+              placeholder="Search message text"
+            />
+          </label>
+          <label className="coralogix__page-size">
+            <span className="muted small">Page size</span>
+            <input
+              type="number"
+              min="1"
+              max="100"
+              value={coralogixPageSize}
+              onChange={(event) => setCoralogixPageSize(Number(event.target.value) || 1)}
+            />
+          </label>
+          <button type="submit">Query Coralogix</button>
+        </form>
+
+        {coralogixStatus && <p className="status">{coralogixStatus}</p>}
+        {coralogixError && <p className="error">{coralogixError}</p>}
+
+        {coralogixResults.entries.length > 0 ? (
+          <div className="coralogix__entries">
+            {coralogixResults.entries.map((entry, index) => (
+              <div className="entry" key={`${entry.timestamp}-${index}`}>
+                <div className="entry__meta">
+                  <span className="pill">{entry.system || 'Unknown system'}</span>
+                  {entry.subsystem && <span className="pill">{entry.subsystem}</span>}
+                  {entry.severity && (
+                    <span className={`badge badge--${entry.severity.toLowerCase()}`}>{entry.severity}</span>
+                  )}
+                  <span className="muted small">{formatDate(entry.timestamp)}</span>
+                </div>
+                <p className="entry__message">{entry.message || 'No message reported'}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="muted">Use the filters above to search Coralogix logs.</p>
+        )}
+
+        <div className="coralogix__pagination">
+          <button type="button" onClick={() => goToPage(coralogixPage - 1)} disabled={coralogixPage <= 1}>
+            Previous
+          </button>
+          <span className="muted small">
+            Page {coralogixPage} of {Number.isFinite(totalPages) ? totalPages : 1}
+          </span>
+          <button
+            type="button"
+            onClick={() => goToPage(coralogixPage + 1)}
+            disabled={coralogixPage >= totalPages}
+          >
+            Next
+          </button>
+        </div>
       </section>
     </main>
   );

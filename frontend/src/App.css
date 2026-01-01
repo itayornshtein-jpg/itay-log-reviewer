@@ -84,6 +84,16 @@ main {
   display: none;
 }
 
+input[type='text'],
+input[type='number'] {
+  padding: 0.75rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  font-size: 1rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 button {
   padding: 0.85rem 1.2rem;
   border-radius: 10px;
@@ -189,6 +199,52 @@ button:hover {
   color: #0f172a;
   display: grid;
   gap: 0.35rem;
+}
+
+.coralogix__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.coralogix__filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+  align-items: end;
+}
+
+.coralogix__filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.coralogix__query {
+  grid-column: span 2;
+}
+
+.coralogix__page-size {
+  max-width: 120px;
+}
+
+.coralogix__entries {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.coralogix__pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1rem;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
 
 @media (max-width: 720px) {
