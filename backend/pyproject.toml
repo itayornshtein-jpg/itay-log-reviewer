@@ -1,8 +1,10 @@
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-select = ["E", "F", "I", "UP", "N", "PL", "B", "SIM"]
 exclude = [".venv", "__pycache__"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "N", "PL", "B", "SIM"]
 
 [tool.ruff.format]
 quote-style = "double"

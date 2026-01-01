@@ -95,7 +95,7 @@ async def _extract_file_contents(file: UploadFile) -> list[str]:
 
 @app.post("/logs/upload", response_model=LogAnalysisResponse)
 async def upload_logs(files: Annotated[list[UploadFile], File(...)]) -> LogAnalysisResponse:
-    """Accept log files (including folders and archives), normalize entries, and extract insights."""
+    """Accept uploaded logs, normalize entries, and extract insights."""
 
     if not files:
         raise HTTPException(
