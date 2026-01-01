@@ -1,4 +1,3 @@
-import os
 from io import BytesIO
 from typing import Annotated
 from zipfile import BadZipFile, ZipFile
