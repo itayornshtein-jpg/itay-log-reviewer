@@ -3,6 +3,78 @@ import './App.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
 
+function setRelativePath(file, path) {
+  if (!path) return file;
+
+  try {
+    Object.defineProperty(file, 'webkitRelativePath', { value: path });
+  } catch (error) {
+    file.webkitRelativePath = path; // eslint-disable-line no-param-reassign
+  }
+
+  return file;
+}
+
+function collectEntries(entry, currentPath = '') {
+  return new Promise((resolve) => {
+    if (entry.isFile) {
+      entry.file(
+        (file) => {
+          const relativePath = currentPath ? `${currentPath}${file.name}` : file.name;
+          resolve([setRelativePath(file, relativePath)]);
+        },
+        () => resolve([]),
+      );
+      return;
+    }
+
+    if (entry.isDirectory) {
+      const nextPath = currentPath ? `${currentPath}${entry.name}/` : `${entry.name}/`;
+      const reader = entry.createReader();
+      const files = [];
+
+      const readBatch = () => {
+        reader.readEntries((batch) => {
+          if (!batch.length) {
+            resolve(files.flat());
+            return;
+          }
+
+          Promise.all(batch.map((child) => collectEntries(child, nextPath))).then((children) => {
+            files.push(...children);
+            readBatch();
+          });
+        });
+      };
+
+      readBatch();
+      return;
+    }
+
+    resolve([]);
+  });
+}
+
+async function getFilesFromDataTransfer(dataTransfer) {
+  const items = Array.from(dataTransfer?.items || []);
+  const entries = items
+    .map((item) => (typeof item.webkitGetAsEntry === 'function' ? item.webkitGetAsEntry() : null))
+    .filter(Boolean);
+
+  if (!entries.length) {
+    return Array.from(dataTransfer?.files || []);
+  }
+
+  const expanded = await Promise.all(entries.map((entry) => collectEntries(entry)));
+  const flattened = expanded.flat();
+
+  if (!flattened.length) {
+    return Array.from(dataTransfer?.files || []);
+  }
+
+  return flattened;
+}
+
 function formatDate(isoString) {
   if (!isoString) return 'N/A';
   const date = new Date(isoString);
@@ -24,7 +96,7 @@ function InsightList({ title, items }) {
 }
 
 function App() {
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
@@ -41,23 +113,43 @@ function App() {
   const [coralogixError, setCoralogixError] = useState('');
   const [coralogixResults, setCoralogixResults] = useState({ entries: [], total: 0 });
 
-  const handleFileChange = (event) => {
-    const selected = event.target.files?.[0];
-    setFile(selected || null);
+  const addFiles = (selectedFiles = []) => {
+    if (!selectedFiles.length) return;
+
+    setFiles((prev) => {
+      const existingKeys = new Set(
+        prev.map((file) => `${file.webkitRelativePath || file.name}-${file.size}-${file.lastModified}`),
+      );
+      const next = [...prev];
+
+      selectedFiles.forEach((file) => {
+        const identifier = file.webkitRelativePath || file.name;
+        const key = `${identifier}-${file.size}-${file.lastModified}`;
+        if (!existingKeys.has(key)) {
+          next.push(file);
+          existingKeys.add(key);
+        }
+      });
+
+      return next;
+    });
+
     setStatus('');
     setError('');
   };
 
-  const handleDrop = (event) => {
+  const handleFileChange = (event) => {
+    const selected = Array.from(event.target.files || []);
+    addFiles(selected);
+  };
+
+  const handleDrop = async (event) => {
     event.preventDefault();
     event.stopPropagation();
     setIsDragging(false);
-    const droppedFile = event.dataTransfer.files?.[0];
-    if (droppedFile) {
-      setFile(droppedFile);
-      setStatus('');
-      setError('');
-    }
+    const dataTransfer = event.dataTransfer;
+    const droppedFiles = await getFilesFromDataTransfer(dataTransfer);
+    addFiles(droppedFiles);
   };
 
   const handleDragOver = (event) => {
@@ -74,8 +166,8 @@ function App() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (!file) {
-      setError('Please choose a log or text file first.');
+    if (!files.length) {
+      setError('Please choose at least one log file, folder, or .zip archive first.');
       return;
     }
 
@@ -85,7 +177,10 @@ function App() {
     setInsights(null);
 
     const formData = new FormData();
-    formData.append('file', file);
+    files.forEach((file) => {
+      const path = file.webkitRelativePath || file.name;
+      formData.append('files', file, path);
+    });
 
     try {
       const response = await fetch(`${API_BASE}/logs/upload`, {
@@ -109,6 +204,17 @@ function App() {
   };
 
   const previewEntries = useMemo(() => entries.slice(0, 5), [entries]);
+
+  const removeFile = (path, size, lastModified) => {
+    setFiles((prev) =>
+      prev.filter(
+        (file) =>
+          (file.webkitRelativePath || file.name) !== path ||
+          file.size !== size ||
+          file.lastModified !== lastModified,
+      ),
+    );
+  };
 
   const combinedTimeline = useMemo(() => {
     const errors = insights?.errors || [];
@@ -177,8 +283,8 @@ function App() {
         <div className="card card--wide">
           <h2>Upload log files</h2>
           <p className="muted">
-            Supported types: <code>.log</code>, <code>.txt</code>, <code>.out</code>, <code>.err</code>. The backend will normalize
-            timestamps, severity, and subsystems before analysis.
+            Supported types: <code>.log</code>, <code>.txt</code>, <code>.out</code>, <code>.err</code>, and <code>.zip</code> archives.
+            You can also pick an entire folder; the backend will normalize timestamps, severity, and subsystems before analysis.
           </p>
           <form className="upload" onSubmit={handleSubmit}>
             <div
@@ -187,13 +293,38 @@ function App() {
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
             >
-              <p className="dropzone__title">Drop log files here</p>
-              <p className="muted small">We will analyze the file right after you click Analyze.</p>
+              <p className="dropzone__title">Drop log files, folders, or .zip archives here</p>
+              <p className="muted small">We will analyze everything right after you click Analyze.</p>
               <label className="file-input">
-                <span>{file ? file.name : 'Or browse to choose a file'}</span>
-                <input type="file" accept=".log,.txt,.out,.err" onChange={handleFileChange} />
+                <span>{files.length ? `${files.length} item${files.length > 1 ? 's' : ''} selected` : 'Or browse to choose files or folders'}</span>
+                <input
+                  type="file"
+                  accept=".log,.txt,.out,.err,.zip"
+                  multiple
+                  webkitdirectory="true"
+                  onChange={handleFileChange}
+                />
               </label>
             </div>
+              {files.length > 0 && (
+                <ul className="file-list">
+                  {files.map((file) => {
+                    const label = file.webkitRelativePath || file.name;
+                    return (
+                      <li key={`${label}-${file.lastModified}`}>
+                        <span className="file-name">{label}</span>
+                        <button
+                          type="button"
+                          className="file-remove"
+                          onClick={() => removeFile(label, file.size, file.lastModified)}
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             <button type="submit">Analyze</button>
           </form>
           {status && <p className="status">{status}</p>}
@@ -381,4 +512,5 @@ function App() {
   );
 }
 
+export { getFilesFromDataTransfer };
 export default App;
